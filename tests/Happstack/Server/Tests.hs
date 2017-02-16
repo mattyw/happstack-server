@@ -12,7 +12,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy  as L
 import qualified Data.Map              as Map
 import Happstack.Server                      ( Request(..), Method(..), Response(..), ServerPart, Headers, RqBody(Body), HttpVersion(..)
-                                             , ToMessage(..), HeaderPair(..), ok, dir, simpleHTTP'', composeFilter, noContentLength, matchMethod)
+                                             , ToMessage(..), HeaderPair(..), ok, dir, simpleHTTP'', seeOther, composeFilter, noContentLength, matchMethod)
 import Happstack.Server.FileServe.BuildingBlocks (sendFileResponse)
 import Happstack.Server.Cookie
 import Happstack.Server.Internal.Compression
@@ -32,6 +32,8 @@ allTests =
                                 , compressFilterResponseTest
                                 , matchMethodTest
                                 , cookieHeaderOrderTest
+				, seeOtherResponse
+				, seeOtherResponseNewLine
                                 ]
 
 cookieParserTest :: Test
@@ -236,3 +238,24 @@ matchMethodTest =
   where
     gethead = [GET, HEAD]
     others  = [POST, PUT, DELETE, TRACE, OPTIONS, CONNECT]
+
+seeOtherPart = msum [seeOther "/nonewline" "hello nonewline"]
+seeOtherPartNewLine = msum [seeOther "/newline\n" "hello newline"]
+
+seeOtherResponse :: Test
+seeOtherResponse =
+    "seeOtherResponse" ~:
+      do req <- mkRequest GET "/nonewline" [] Map.empty L.empty
+         res <- simpleHTTP'' seeOtherPart req
+         assertEqual "respone code"     (rsCode res) 303
+         assertEqual "body"             (unpack (rsBody res)) "hello nonewline"
+         assertEqual "location" 	((hName &&& hValue) <$> Map.lookup (B.pack "location") (rsHeaders res)) (Just (B.pack "Location", [B.pack "/nonewline"]))
+
+seeOtherResponseNewLine :: Test
+seeOtherResponseNewLine =
+    "seeOtherResponseNewLine" ~:
+      do req <- mkRequest GET "/newline" [] Map.empty L.empty
+         res <- simpleHTTP'' seeOtherPartNewLine req
+         assertEqual "respone code"     (rsCode res) 303
+         assertEqual "body"             (unpack (rsBody res)) "hello newline"
+         assertEqual "location" 	((hName &&& hValue) <$> Map.lookup (B.pack "location") (rsHeaders res)) (Just (B.pack "Location", [B.pack "/newline\n"]))
